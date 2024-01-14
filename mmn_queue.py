@@ -41,11 +41,11 @@ class MMN(Simulation):
     def schedule_arrival(self, job_id):  # TODO: complete this method
         # schedule the arrival following an exponential distribution, to compensate the number of queues the arrival
         # time should depend also on "n"
-        self.schedule(..., ...)
+        self.schedule(expovariate(self.arrival_rate), Arrival(job_id))
 
     def schedule_completion(self, job_id):  # TODO: complete this method
         # schedule the time of the completion event
-        self.schedule(..., ...)
+        self.schedule(expovariate(self.mu), Completion(job_id))
 
     @property
     def queue_len(self):
@@ -59,16 +59,16 @@ class Arrival(Event):
 
     def process(self, sim: MMN):  # TODO: complete this method
         # set the arrival time of the job
-        ...
+        sim.arrivals[self.id] = sim.t
         # if there is no running job, assign the incoming one and schedule its completion
-        if ...:
-            ...
-            ...
+        if sim.running is None:
+            sim.running = self.id
+            sim.schedule_completion(self.id)
         # otherwise put the job into the queue
         else:
-            ...
+            sim.queue.append(self.id)
         # schedule the arrival of the next job
-        ...
+        sim.schedule_arrival(self.id+1)
 
 class Completion(Event):
     def __init__(self, job_id):
@@ -77,13 +77,13 @@ class Completion(Event):
     def process(self, sim: MMN):  # TODO: complete this method
         assert sim.running is not None
         # set the completion time of the running job
-        ...
+        sim.completions[self.id] = sim.t
         # if the queue is not empty
-        if ...:
+        if len(sim.queue) > 0:
             # get a job from the queue
-            ...
+            job = sim.queue.popleft()
             # schedule its completion
-            ...
+            sim.schedule_completion(job)
         else:
             sim.running = None
 
@@ -101,7 +101,7 @@ def main():
     args = parser.parse_args()
 
     if args.seed:
-        random.seed(args.seed)  # set a seed to make experiments repeatable
+        seed(args.seed)  # set a seed to make experiments repeatable
     if args.verbose:
         logging.basicConfig(format='{levelname}:{message}', level=logging.INFO, style='{')  # output info on stdout
 
