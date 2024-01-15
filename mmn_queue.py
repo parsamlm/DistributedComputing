@@ -24,11 +24,11 @@ from discrete_event_sim import Simulation, Event
 class MMN(Simulation):
 
     def __init__(self, lambd, mu, n, d):
-        if n != 1 or d != 1:
+        if d != 1:
             raise NotImplementedError  # extend this to make it work for multiple queues and supermarket
 
         super().__init__()
-        self.running = None  # if not None, the id of the running job
+        self.running = []  # create an array of servers
         self.queue = collections.deque()  # FIFO queue of the system
         self.arrivals = {}  # dictionary mapping job id to arrival time
         self.completions = {}  # dictionary mapping job id to completion time
@@ -49,7 +49,7 @@ class MMN(Simulation):
 
     @property
     def queue_len(self):
-        return (self.running is not None) + len(self.queue)
+        return len(self.running) + len(self.queue)
 
 
 class Arrival(Event):
@@ -58,11 +58,12 @@ class Arrival(Event):
         self.id = job_id
 
     def process(self, sim: MMN):  # TODO: complete this method
+        # print(f"Job {self.id} arrived at time {sim.t}")
         # set the arrival time of the job
         sim.arrivals[self.id] = sim.t
         # if there is no running job, assign the incoming one and schedule its completion
-        if sim.running is None:
-            sim.running = self.id
+        if len(sim.running) < sim.n:
+            sim.running.append(self.id)
             sim.schedule_completion(self.id)
         # otherwise put the job into the queue
         else:
@@ -75,25 +76,28 @@ class Completion(Event):
         self.id = job_id  # currently unused, might be useful when extending
 
     def process(self, sim: MMN):  # TODO: complete this method
-        assert sim.running is not None
+        # print(f"Job {self.id} completed at time {sim.t}")
+        server_index = sim.running.index(self.id)
+        assert server_index is not None
         # set the completion time of the running job
         sim.completions[self.id] = sim.t
         # if the queue is not empty
         if len(sim.queue) > 0:
             # get a job from the queue
             job = sim.queue.popleft()
+            sim.running[server_index] = job
             # schedule its completion
             sim.schedule_completion(job)
         else:
-            sim.running = None
+            sim.running.remove(self.id)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lambd', type=float, default=0.7)
+    parser.add_argument('--lambd', type=float, default=0.99)
     parser.add_argument('--mu', type=float, default=1)
     parser.add_argument('--max-t', type=float, default=1_000_000)
-    parser.add_argument('--n', type=int, default=1)
+    parser.add_argument('--n', type=int, default=10)
     parser.add_argument('--d', type=int, default=1)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
@@ -111,6 +115,7 @@ def main():
     completions = sim.completions
     W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
     print(f"Average time spent in the system: {W}")
+    # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
     print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
 
     if args.csv is not None:
