@@ -108,7 +108,7 @@ def plot_queue_lengths(queueLengths):
             counts[i] += 1
     fractions = [count/len(queueLengths) for count in counts]
     plt.plot(range(1, 15), fractions[1:])  # Start from 1 to omit zero lengths
-    plt.xlim(0, 15)  # Set x-axis limits to 1 and 15
+    plt.xlim(0, 15)  # Set x-axis limits to 0 and 15
     plt.ylim(0.0, 1.0)  # Set y-axis limits to 0.0 and 1.0
     plt.show()
 
