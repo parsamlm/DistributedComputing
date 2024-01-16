@@ -5,6 +5,7 @@ import csv
 import collections
 import logging
 from random import expovariate, seed
+import matplotlib.pyplot as plt
 
 from discrete_event_sim import Simulation, Event
 
@@ -37,6 +38,9 @@ class MMN(Simulation):
         self.mu = mu
         self.arrival_rate = lambd * n
         self.schedule(expovariate(self.arrival_rate), Arrival(0))
+        self.timeInterval = 1000
+        self.schedule(self.timeInterval, QueLength())
+        self.queueLengths = []
 
     def schedule_arrival(self, job_id):  # TODO: complete this method
         # schedule the arrival following an exponential distribution, to compensate the number of queues the arrival
@@ -51,6 +55,10 @@ class MMN(Simulation):
     def queue_len(self):
         return len(self.running) + len(self.queue)
 
+class QueLength(Event):
+    def process(self, sim: MMN):
+        sim.queueLengths.append(sim.queue_len)
+        sim.schedule(sim.timeInterval, QueLength())
 
 class Arrival(Event):
 
@@ -91,13 +99,25 @@ class Completion(Event):
         else:
             sim.running.remove(self.id)
 
+def plot_queue_lengths(queueLengths):
+    counts = [0]*15
+    for length in queueLengths:
+        if length == 0:  # Skip over queue lengths of zero
+            continue
+        for i in range(min(length+1, 15)):
+            counts[i] += 1
+    fractions = [count/len(queueLengths) for count in counts]
+    plt.plot(range(1, 15), fractions[1:])  # Start from 1 to omit zero lengths
+    plt.xlim(0, 15)  # Set x-axis limits to 1 and 15
+    plt.ylim(0.0, 1.0)  # Set y-axis limits to 0.0 and 1.0
+    plt.show()
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lambd', type=float, default=0.99)
     parser.add_argument('--mu', type=float, default=1)
     parser.add_argument('--max-t', type=float, default=1_000_000)
-    parser.add_argument('--n', type=int, default=10)
+    parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--d', type=int, default=1)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
@@ -118,6 +138,9 @@ def main():
     # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
     print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
 
+    # Call the function with your queue lengths
+    plot_queue_lengths(sim.queueLengths)
+    
     if args.csv is not None:
         with open(args.csv, 'a', newline='') as f:
             writer = csv.writer(f)
