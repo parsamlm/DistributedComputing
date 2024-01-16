@@ -99,22 +99,18 @@ class Completion(Event):
         else:
             sim.running.remove(self.id)
 
-def plot_queue_lengths(queueLengths):
-    counts = [0]*15
-    for length in queueLengths:
-        if length == 0:  # Skip over queue lengths of zero
-            continue
-        for i in range(min(length+1, 15)):
-            counts[i] += 1
-    fractions = [count/len(queueLengths) for count in counts]
-    plt.plot(range(1, 15), fractions[1:])  # Start from 1 to omit zero lengths
-    plt.xlim(0, 15)  # Set x-axis limits to 0 and 15
-    plt.ylim(0.0, 1.0)  # Set y-axis limits to 0.0 and 1.0
-    plt.show()
+def run_simulation(lambd, mu, n, max_t, d):
+    sim = MMN(lambd, mu, n, d)
+    sim.run(max_t)
+    completions = sim.completions
+    W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
+    print(f"Average time spent in the system: {W}")
+
+    return sim.queueLengths
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lambd', type=float, default=0.99)
+    parser.add_argument('--lambd', type=float, default=0.5)
     parser.add_argument('--mu', type=float, default=1)
     parser.add_argument('--max-t', type=float, default=1_000_000)
     parser.add_argument('--n', type=int, default=1)
@@ -138,8 +134,24 @@ def main():
     # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
     print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
 
-    # Call the function with your queue lengths
-    plot_queue_lengths(sim.queueLengths)
+    for lambd in [0.5, 0.9, 0.95, 0.99]:
+        queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
+        counts = [0]*15
+        for length in queueLengths:
+            if length == 0:  # Skip over queue lengths of zero
+                continue
+            for i in range(min(length+1, 15)):
+                counts[i] += 1
+        fractions = [count/len(queueLengths) for count in counts]
+        plt.plot(range(1, 15), fractions[1:], label=f'lambd={lambd}')
+
+    plt.xlabel('Queue length')
+    plt.ylabel('Fraction of queues with at least that size')
+    plt.xlim(0, 15)  # Set x-axis limits to 0 and 15
+    plt.ylim(0.0, 1.0)  # Set y-axis limits to 0.0 and 1.0
+    plt.legend()
+    plt.grid(True)
+    plt.show()
     
     if args.csv is not None:
         with open(args.csv, 'a', newline='') as f:
