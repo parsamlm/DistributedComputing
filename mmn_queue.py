@@ -44,20 +44,17 @@ class MMN(Simulation):
         # time should depend also on "n"
         self.schedule(expovariate(self.arrival_rate), Arrival(job_id))
 
-    def schedule_completion(self, job_id):  # TODO: complete this method
+    def schedule_completion(self, job_id, server):  # TODO: complete this method
         # schedule the time of the completion event
-        self.schedule(expovariate(self.mu), Completion(job_id))
+        self.schedule(expovariate(self.mu), Completion(job_id, server))
 
     def queue_len(self, i):
-            return len(self.queues[i]) +(1 if self.running[i] is not None else 0)
+        return len(self.queues[i]) + (1 if self.running[i] is not None else 0)
 
 class QueLength(Event):
     def process(self, sim: MMN):
         for i in range(sim.n):
             sim.queueLengths.append(sim.queue_len(i))
-        # sim.queueLengths = [queueLength + [len(queue) + (1 if sim.running[i] is not None else 0)] for i, (queueLength, queue) in enumerate(zip(sim.queueLengths, sim.queues))]  # Append the current length of each queue plus the number of jobs currently being served
-        # sim.queueLengths = [queueLength + [len(queue) + (1 if running is not None else 0)] for queueLength, queue, running in zip(sim.queueLengths, sim.queues, sim.running)]  # Append the current length of each queue plus the number of jobs currently being served
-        # sim.queueLengths = [queueLength + [len(queue)] for queueLength, queue in zip(sim.queueLengths, sim.queues)]  # Append the current length of each queue plus the number of jobs currently being served
         sim.schedule(sim.timeInterval, QueLength())
 
 class Arrival(Event):
@@ -71,11 +68,10 @@ class Arrival(Event):
         sim.arrivals[self.id] = sim.t
         servers = sample(range(sim.n), sim.d)  # sample d servers
         server = min(servers, key=lambda s: len(sim.queues[s])) # find the server with the shortest queue
-        sim.log_info(f"Job {self.id} assigned to server {server} with queue length {len(sim.queues[server])}")
         # if there is no running job, assign the incoming one and schedule its completion
         if sim.running[server] is None:
             sim.running[server] = self.id
-            sim.schedule_completion(self.id)
+            sim.schedule_completion(self.id, server)
         # otherwise put the job into the queue
         else:
             sim.queues[server].append(self.id)
@@ -83,24 +79,24 @@ class Arrival(Event):
         sim.schedule_arrival(self.id+1)
 
 class Completion(Event):
-    def __init__(self, job_id):
+    def __init__(self, job_id, server):
         self.id = job_id  # currently unused, might be useful when extending
+        self.server = server
 
     def process(self, sim: MMN):  # TODO: complete this method
         # print(f"Job {self.id} completed at time {sim.t}")
-        server_index = sim.running.index(self.id)
-        assert server_index is not None
+        assert sim.running[self.server] is not None
+        # assert server_index is not None
         # set the completion time of the running job
         sim.completions[self.id] = sim.t
         # if the queue is not empty
-        if len(sim.queues[server_index]) > 0:
+        if len(sim.queues[self.server]) > 0:
             # get a job from the queue
-            job = sim.queues[server_index].popleft()
-            sim.running[server_index] = job
+            job = sim.queues[self.server].popleft()
             # schedule its completion
-            sim.schedule_completion(job)
+            sim.schedule_completion(job, self.server)
         else:
-            sim.running[server_index] = None
+            sim.running[self.server] = None
 
 def run_simulation(lambd, mu, n, max_t, d):
     sim = MMN(lambd, mu, n, d)
@@ -113,11 +109,11 @@ def run_simulation(lambd, mu, n, max_t, d):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lambd', type=float, default=0.99)
+    parser.add_argument('--lambd', type=float, default=0.5)
     parser.add_argument('--mu', type=float, default=1)
-    parser.add_argument('--max-t', type=float, default=1_000_000)
-    parser.add_argument('--n', type=int, default=2)
-    parser.add_argument('--d', type=int, default=2)
+    parser.add_argument('--max-t', type=float, default=100_000)
+    parser.add_argument('--n', type=int, default=100)
+    parser.add_argument('--d', type=int, default=10)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
     parser.add_argument("--verbose", action='store_true')
@@ -139,7 +135,6 @@ def main():
 
     for lambd in [0.5, 0.9, 0.95, 0.99]:
         queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
-        # queue_lengths_flat = [length for sublist in queueLengths for length in sublist]
         counts = [0]*15
         for length in queueLengths:
             if length == 0:  # Skip over queue lengths of zero
