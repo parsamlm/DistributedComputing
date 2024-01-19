@@ -35,7 +35,6 @@ class Simulation:
                 break
             self.t = t
             event.process(self)
-        print(f"It has finished at {self.t} seconds.")
 
     def log_info(self, msg):
         logging.info(f'{self.t:.2f}: {msg}')

@@ -27,6 +27,23 @@ class DataLost(Exception):
     pass
 
 
+def get_not_lost_blocks_count(node: "Node") -> int:
+    count: int = 0
+    for i in range(node.n):
+        if node.local_blocks[i] or node.backed_up_blocks[i]:
+            count += 1
+    return count
+
+
+def get_lost_blocks_count(nodes: list["Node"]) -> int:
+    lost: int = 0
+    for node in nodes:
+        count: int = get_not_lost_blocks_count(node)
+        if count < node.k:
+            lost += node.n
+    return lost
+
+
 class Backup(Simulation):
     """Backup simulation.
     """
@@ -390,6 +407,9 @@ def main():
         nodes.extend(Node(f"{node_class}-{i}", *cfg) for i in range(class_config.getint('number')))
     sim = Backup(nodes)
     sim.run(parse_timespan(args.max_t))
+    for node in nodes:
+        print(f"Node {node.name}: Average uptime: {node.average_uptime}, Average downtime: {node.average_downtime}, "
+              f"Average lifetime: {node.average_lifetime}, Average recover time: {node.average_recover_time}")
     sim.log_info(f"Simulation over")
 
 
