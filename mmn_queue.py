@@ -38,15 +38,23 @@ class MMN(Simulation):
         self.timeInterval = 1000
         self.schedule(self.timeInterval, QueLength())
         self.queueLengths = []  # Create a list of lists to store the length of each queue
+        self.timeSlice = 10
 
     def schedule_arrival(self, job_id):  # TODO: complete this method
         # schedule the arrival following an exponential distribution, to compensate the number of queues the arrival
         # time should depend also on "n"
         self.schedule(expovariate(self.arrival_rate), Arrival(job_id))
 
-    def schedule_completion(self, job_id, server):  # TODO: complete this method
+    def schedule_completion(self, job_id, server, remaining_time = None):  # TODO: complete this method
+        service_time = expovariate(self.mu)
         # schedule the time of the completion event
-        self.schedule(expovariate(self.mu), Completion(job_id, server))
+        if remaining_time is not None:
+            service_time = remaining_time
+
+        if service_time > self.timeSlice:
+            self.schedule(self.timeSlice, Preemption(job_id, server, service_time - self.timeSlice))
+        else:        
+            self.schedule(service_time, Completion(job_id, server))
 
     def queue_len(self, i):
         return len(self.queues[i]) + (1 if self.running[i] is not None else 0)
@@ -93,6 +101,33 @@ class Completion(Event):
         if len(sim.queues[self.server]) > 0:
             # get a job from the queue
             job = sim.queues[self.server].popleft()
+            sim.running[self.server] = job
+            # schedule its completion
+            sim.schedule_completion(job, self.server)
+        else:
+            sim.running[self.server] = None
+
+class Preemption(Event):
+    def __init__(self, job_id, server, remaining_time):
+        self.id = job_id  # currently unused, might be useful when extending
+        self.server = server
+        self.remaining_time = remaining_time
+
+    def process(self, sim: MMN):  # TODO: complete this method
+        servers = sample(range(sim.n), sim.d)  # sample d servers
+        server = min(servers, key=lambda s: len(sim.queues[s])) # find the server with the shortest queue
+        # if there is no running job, assign the incoming one and schedule its completion
+        if sim.running[server] is None:
+            sim.running[server] = self.id
+            sim.schedule_completion(self.id, server, self.remaining_time)
+        # otherwise put the job into the queue
+        else:
+            sim.queues[server].append(self.id)
+
+        if len(sim.queues[self.server]) > 0:
+            # get a job from the queue
+            job = sim.queues[self.server].popleft()
+            sim.running[self.server] = job
             # schedule its completion
             sim.schedule_completion(job, self.server)
         else:
@@ -111,9 +146,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lambd', type=float, default=0.5)
     parser.add_argument('--mu', type=float, default=1)
-    parser.add_argument('--max-t', type=float, default=100_000)
+    parser.add_argument('--max-t', type=float, default=1_000)
     parser.add_argument('--n', type=int, default=100)
-    parser.add_argument('--d', type=int, default=10)
+    parser.add_argument('--d', type=int, default=5)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
     parser.add_argument("--verbose", action='store_true')
