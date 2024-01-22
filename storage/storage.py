@@ -122,6 +122,9 @@ class Node:
     def __post_init__(self):
         """Compute other data dependent on config values and set up initial state."""
 
+        # whether this node is selfish. By default, nodes are not selfish.
+        self.selfish: bool = False
+
         # whether this node is online. All nodes start offline.
         self.online: bool = False
 
@@ -153,12 +156,36 @@ class Node:
 
     def find_block_to_back_up(self):
         """Returns the block id of a block that needs backing up, or None if there are none."""
+        if self.selfish:
+            # check if node has no free space
+            if self.free_space == 0:
+                # selfish node backs up own blocks if no free space
+                for block_id, held_locally in enumerate(self.local_blocks):
+                    if held_locally:
+                        return block_id
 
-        # find a block that we have locally but not remotely
-        # check `enumerate` and `zip`at https://docs.python.org/3/library/functions.html
-        for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
-            if held_locally and not peer:
-                return block_id
+            # check for free slots
+            if len(self.backed_up_blocks) == self.n:
+                # selfish node backs up own blocks if no free slots
+                for block_id, held_locally in enumerate(self.local_blocks):
+                    if held_locally:
+                        return block_id
+            else:
+                # prioritize backing up other nodes' blocks
+                for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
+                    if held_locally and not peer:
+                        return block_id
+        else:
+            # prioritize backing up other nodes' blocks
+            for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
+                if held_locally and not peer:
+                    return block_id
+
+            # only back up own blocks if no free slots
+            if len(self.backed_up_blocks) == self.n:
+                for block_id, held_locally in enumerate(self.local_blocks):
+                    if held_locally:
+                        return block_id
         return None
 
     def schedule_next_upload(self, sim: Backup):
