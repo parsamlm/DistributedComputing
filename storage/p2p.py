@@ -16,7 +16,7 @@ def run():
 
         parser = argparse.ArgumentParser()
         parser.add_argument("--config", default="p2p.cfg", help="configuration file")
-        parser.add_argument("--selfish_nodes_count", default=3, help="It should be less or equal to n")
+        parser.add_argument("--selfish_nodes_count", default=9, help="It should be less or equal to n")
         parser.add_argument("--max-t", default="100 years")
         parser.add_argument("--seed", default=1, help="random seed")
         parser.add_argument("--verbose", action='store_true')
@@ -66,11 +66,15 @@ def run():
             lost_blocks_avg_list.append(sum(lost_blocks_arr) / len(lost_blocks_arr))
         data_for_lost_blocks_avg_plot.append(lost_blocks_avg_list)
         for i in data_for_lost_blocks_avg_plot:
-            plt.plot(life_time_list, i,
-                     label=f"Simulation Type: {extension}")
+            if extension == extension_type[1]:
+                plt.plot(life_time_list, i,
+                         label=f"Sim. Type: {extension} | {selfish_nodes_count} selfish nodes")
+            else:
+                plt.plot(life_time_list, i,
+                         label=f"Sim. Type: {extension}")
     plt.xlabel("Average lifetime of nodes")
     plt.ylabel("Average lost blocks")
-    plt.title(f"Results of {simulation_count} times simulation")
+    plt.title(f"Results of {simulation_count} times simulation | P2P Configuration")
     plt.legend(loc=0)
     plt.grid()
     plt.show()
