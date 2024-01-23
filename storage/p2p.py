@@ -9,7 +9,7 @@ from storage import Backup, Node, get_lost_blocks_count
 
 def run():
     selfish_nodes_count = 0
-    extension_type = ["Default", "Selfish node strategy"]
+    extension_type = ["Default", "Selfish node"]
     simulation_count = 10
 
     for extension in extension_type:
@@ -68,10 +68,10 @@ def run():
         for i in data_for_lost_blocks_avg_plot:
             if extension == extension_type[1]:
                 plt.plot(life_time_list, i,
-                         label=f"Sim. Type: {extension} | {selfish_nodes_count} selfish nodes")
+                         label=f"Type: {extension} | {selfish_nodes_count} selfish nodes")
             else:
                 plt.plot(life_time_list, i,
-                         label=f"Sim. Type: {extension}")
+                         label=f"Type: {extension}")
     plt.xlabel("Average lifetime of nodes")
     plt.ylabel("Average lost blocks")
     plt.title(f"Results of {simulation_count} times simulation | P2P Configuration")
