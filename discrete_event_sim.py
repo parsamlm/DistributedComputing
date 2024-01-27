@@ -1,7 +1,6 @@
 import heapq
 import logging
 
-
 # suggestion: have a look at the heapq library (https://docs.python.org/dev/library/heapq.html)
 # and in particular heappush and heappop
 
@@ -24,7 +23,7 @@ class Simulation:
         """Add an event to the event queue after the required delay."""
 
         # add both type of events into the heap, either arrival or completion, at time self.t + delay (random delay)
-        heapq.heappush(self.events, (self.t + delay, event))
+        heapq.heappush(self.events,(self.t + delay, event))
 
     def run(self, max_t=float('inf')):
         """Run the simulation. If max_t is specified, stop it at that time."""
