@@ -9,6 +9,8 @@ from workloads import weibull_generator
 import matplotlib.pyplot as plt
 
 from discrete_event_sim import Simulation, Event
+from multiprocessing import Pool
+
 
 # One possible modification is to use a different distribution for job sizes or and/or interarrival times.
 # Weibull distributions (https://en.wikipedia.org/wiki/Weibull_distribution) are a generalization of the
@@ -23,7 +25,7 @@ from discrete_event_sim import Simulation, Event
 # and then call gen() every time you need a random variable
 class MMN(Simulation):
 
-    def __init__(self, lambd, mu, n, d):
+    def __init__(self, lambd, mu, n, d, timeSlice = 1):
         super().__init__()
         self.running = [None] * n  # create an array of servers
         self.queues = [collections.deque() for _ in range(n)]  # FIFO queue of the system
@@ -38,7 +40,7 @@ class MMN(Simulation):
         self.timeInterval = 1000
         self.schedule(self.timeInterval, QueLength())
         self.queueLengths = []  # Create a list of lists to store the length of each queue
-        self.timeSlice = 10
+        self.timeSlice = timeSlice
 
     def schedule_arrival(self, job_id):  # TODO: complete this method
         # schedule the arrival following an exponential distribution, to compensate the number of queues the arrival
@@ -138,17 +140,38 @@ def run_simulation(lambd, mu, n, max_t, d):
     sim.run(max_t)
     completions = sim.completions
     W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
-    print(f"Average time spent in the system: {W}")
+    print(f"Average time spent in the system: lambd{lambd}: {W}")
 
     return sim.queueLengths
 
+def run_simulation_wrapper(args):
+    lambd, mu, n, max_t, d = args
+    return run_simulation(lambd, mu, n, max_t, d)
+
+def find_optimal_time_slice(lambd, mu, n, max_t, d, min_time_slice, max_time_slice, step):
+    best_time_slice = min_time_slice
+    best_metric = float('inf')
+
+    for time_slice in range(min_time_slice, max_time_slice + 1, step):
+        sim = MMN(lambd, mu, n, d, time_slice)
+        sim.run(max_t)
+        completions = sim.completions
+        W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
+        if W < best_metric:
+            best_metric = W
+            best_time_slice = time_slice
+        print(f"time_slice: {time_slice}, W: {W}")
+
+
+    return best_time_slice
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lambd', type=float, default=0.5)
+    parser.add_argument('--lambd', type=float, default=0.99)
     parser.add_argument('--mu', type=float, default=1)
-    parser.add_argument('--max-t', type=float, default=1_000)
-    parser.add_argument('--n', type=int, default=100)
-    parser.add_argument('--d', type=int, default=5)
+    parser.add_argument('--max-t', type=float, default=10_000)
+    parser.add_argument('--n', type=int, default=1000)
+    parser.add_argument('--d', type=int, default=10)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
     parser.add_argument("--verbose", action='store_true')
@@ -159,17 +182,28 @@ def main():
     if args.verbose:
         logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.INFO)
 
-    sim = MMN(args.lambd, args.mu, args.n, args.d)
-    sim.run(args.max_t)
+    # sim = MMN(args.lambd, args.mu, args.n, args.d)
+    # sim.run(args.max_t)
 
-    completions = sim.completions
-    W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
-    print(f"Average time spent in the system: {W}")
-    # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
-    print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
+    # completions = sim.completions
+    # W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
+    # print(f"Average time spent in the system: {W}")
+    # # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
+    # print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
 
-    for lambd in [0.5, 0.9, 0.95, 0.99]:
-        queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
+    # optimal_time_slice = find_optimal_time_slice(args.lambd, args.mu,  args.n, args.max_t, args.d, 1, 100, 1)
+    # print(f"Optimal time slice for lamda {args.lambd}: {optimal_time_slice}")
+
+    # Create a list of parameters for each simulation
+    simulations = [(lambd, args.mu, args.n, args.max_t, args.d) for lambd in [0.5, 0.9, 0.95, 0.99]]
+
+    # Create a multiprocessing Pool
+    with Pool() as p:
+        results = p.map(run_simulation_wrapper, simulations)
+
+    for lambd, queueLengths in zip([0.5, 0.9, 0.95, 0.99], results):
+    # for lambd in [0.5, 0.9, 0.95, 0.99]:
+        # queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
         counts = [0]*15
         for length in queueLengths:
             if length == 0:  # Skip over queue lengths of zero
@@ -187,10 +221,10 @@ def main():
     plt.grid(True)
     plt.show()
     
-    if args.csv is not None:
-        with open(args.csv, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([args.lambd, args.mu, args.max_t, W])
+    # if args.csv is not None:
+    #     with open(args.csv, 'a', newline='') as f:
+    #         writer = csv.writer(f)
+    #         writer.writerow([args.lambd, args.mu, args.max_t, W])
 
 
 if __name__ == '__main__':
