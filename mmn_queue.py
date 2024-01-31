@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from discrete_event_sim import Simulation, Event
 from multiprocessing import Pool
 
-
 # One possible modification is to use a different distribution for job sizes or and/or interarrival times.
 # Weibull distributions (https://en.wikipedia.org/wiki/Weibull_distribution) are a generalization of the
 # exponential distribution, and can be used to see what happens when values are more uniform (shape > 1,
@@ -140,7 +139,7 @@ def run_simulation(lambd, mu, n, max_t, d):
     sim.run(max_t)
     completions = sim.completions
     W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
-    print(f"Average time spent in the system: lambd{lambd}: {W}")
+    print(f"Average time spent in the system: lambd {lambd}: {W}")
 
     return sim.queueLengths
 
