@@ -5,22 +5,10 @@ import csv
 import collections
 import logging
 from random import expovariate, seed, sample
-from workloads import weibull_generator
 import matplotlib.pyplot as plt
 
 from discrete_event_sim import Simulation, Event
 
-# One possible modification is to use a different distribution for job sizes or and/or interarrival times.
-# Weibull distributions (https://en.wikipedia.org/wiki/Weibull_distribution) are a generalization of the
-# exponential distribution, and can be used to see what happens when values are more uniform (shape > 1,
-# approaching a "bell curve") or less (shape < 1, "heavy tailed" case when most of the work is concentrated
-# on few jobs).
-
-# To use weibull variates, for a given set of parameters do something like
-# from workloads import weibull_generator
-# gen = weibull_generator(shape, mean)
-
-# and then call gen() every time you need a random variable
 class MMN(Simulation):
 
     def __init__(self, lambd, mu, n, d):
@@ -39,16 +27,19 @@ class MMN(Simulation):
         self.schedule(self.timeInterval, QueLength())
         self.queueLengths = []  # Create a list of lists to store the length of each queue
         self.timeSlice = 10
+        self.jobServiceTimes = {}  # Track original service times
 
-    def schedule_arrival(self, job_id):  # TODO: complete this method
+    def schedule_arrival(self, job_id):
         # schedule the arrival following an exponential distribution, to compensate the number of queues the arrival
         # time should depend also on "n"
         self.schedule(expovariate(self.arrival_rate), Arrival(job_id))
 
-    def schedule_completion(self, job_id, server, remaining_time = None):  # TODO: complete this method
-        service_time = expovariate(self.mu)
+    def schedule_completion(self, job_id, server, is_preempted=False, remaining_time = None):
         # schedule the time of the completion event
-        if remaining_time is not None:
+        if not is_preempted:
+            service_time = expovariate(self.mu)
+            self.jobServiceTimes[job_id] = service_time  # Save the original service time
+        else:
             service_time = remaining_time
 
         if service_time > self.timeSlice:
@@ -82,7 +73,7 @@ class Arrival(Event):
             sim.schedule_completion(self.id, server)
         # otherwise put the job into the queue
         else:
-            sim.queues[server].append(self.id)
+            sim.queues[server].append((self.id, sim.jobServiceTimes.get(self.id, expovariate(sim.mu))))
         # schedule the arrival of the next job
         sim.schedule_arrival(self.id+1)
 
@@ -97,41 +88,34 @@ class Completion(Event):
         # assert server_index is not None
         # set the completion time of the running job
         sim.completions[self.id] = sim.t
+        sim.running[self.server] = None  # Mark the server as idle
+
         # if the queue is not empty
-        if len(sim.queues[self.server]) > 0:
-            # get a job from the queue
-            job = sim.queues[self.server].popleft()
-            sim.running[self.server] = job
-            # schedule its completion
-            sim.schedule_completion(job, self.server)
+        if sim.queues[self.server]:
+            # Fetch the next job from the queue
+            next_job_id, next_job_remaining_time = sim.queues[self.server].popleft()
+            sim.running[self.server] = next_job_id  # Set the server to run the next job
+            # Schedule the completion or preemption of the next job, considering its remaining time
+            sim.schedule_completion(next_job_id, self.server, is_preempted=True, remaining_time=next_job_remaining_time)
         else:
             sim.running[self.server] = None
 
 class Preemption(Event):
     def __init__(self, job_id, server, remaining_time):
-        self.id = job_id  # currently unused, might be useful when extending
+        self.id = job_id
         self.server = server
         self.remaining_time = remaining_time
 
-    def process(self, sim: MMN):  # TODO: complete this method
-        servers = sample(range(sim.n), sim.d)  # sample d servers
-        server = min(servers, key=lambda s: len(sim.queues[s])) # find the server with the shortest queue
-        # if there is no running job, assign the incoming one and schedule its completion
-        if sim.running[server] is None:
-            sim.running[server] = self.id
-            sim.schedule_completion(self.id, server, self.remaining_time)
-        # otherwise put the job into the queue
-        else:
-            sim.queues[server].append(self.id)
+    def process(self, sim: MMN):
+        # Directly requeue the job in the same server's queue with remaining time
+        sim.queues[self.server].append((self.id, self.remaining_time))
+        sim.running[self.server] = None  # Mark the server as idle
+        # Immediately attempt to process the next job in the queue
+        if sim.queues[self.server]:
+            next_job_id, next_job_time = sim.queues[self.server].popleft()
+            sim.running[self.server] = next_job_id
+            sim.schedule_completion(next_job_id, self.server, is_preempted=True, remaining_time=next_job_time)
 
-        if len(sim.queues[self.server]) > 0:
-            # get a job from the queue
-            job = sim.queues[self.server].popleft()
-            sim.running[self.server] = job
-            # schedule its completion
-            sim.schedule_completion(job, self.server)
-        else:
-            sim.running[self.server] = None
 
 def run_simulation(lambd, mu, n, max_t, d):
     sim = MMN(lambd, mu, n, d)
@@ -146,9 +130,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lambd', type=float, default=0.5)
     parser.add_argument('--mu', type=float, default=1)
-    parser.add_argument('--max-t', type=float, default=1_000)
-    parser.add_argument('--n', type=int, default=100)
-    parser.add_argument('--d', type=int, default=5)
+    parser.add_argument('--max-t', type=float, default=10_000)
+    parser.add_argument('--n', type=int, default=1000)
+    parser.add_argument('--d', type=int, default=1)
     parser.add_argument('--csv', help="CSV file in which to store results")
     parser.add_argument("--seed", help="random seed")
     parser.add_argument("--verbose", action='store_true')
@@ -158,15 +142,6 @@ def main():
         seed(args.seed)  # set a seed to make experiments repeatable
     if args.verbose:
         logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.INFO)
-
-    sim = MMN(args.lambd, args.mu, args.n, args.d)
-    sim.run(args.max_t)
-
-    completions = sim.completions
-    W = (sum(completions.values()) - sum(sim.arrivals[job_id] for job_id in completions)) / len(completions)
-    print(f"Average time spent in the system: {W}")
-    # print(f"Theoretical expectation for waiting time: {args.lambd / (1 - args.lambd)}")
-    print(f"Theoretical expectation for random server choice: {1 / (1 - args.lambd)}")
 
     for lambd in [0.5, 0.9, 0.95, 0.99]:
         queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
@@ -186,12 +161,6 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.show()
-    
-    if args.csv is not None:
-        with open(args.csv, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([args.lambd, args.mu, args.max_t, W])
-
 
 if __name__ == '__main__':
     main()
