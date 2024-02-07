@@ -10,7 +10,7 @@ from storage import Backup, Node, get_lost_blocks_count
 def run():
     selfish_nodes_count = 0
     extension_type = ["Default", "Selfish node"]
-    simulation_count = 10
+    simulation_count = 1
 
     for extension in extension_type:
 

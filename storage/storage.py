@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
-import argparse
-import configparser
 import logging
-import random
 from dataclasses import dataclass
 from random import expovariate
 from typing import Optional, List
@@ -12,7 +9,7 @@ from typing import Optional, List
 # format (e.g., "500 KiB" or "5 days"). You can safely remove this if you don't want to install it on your system, but
 # then you'll need to handle sizes in bytes and time spans in seconds--or write your own alternative.
 # It should be trivial to install (e.g., apt install python3-humanfriendly or conda/pip install humanfriendly).
-from humanfriendly import format_timespan, parse_size, parse_timespan
+from humanfriendly import format_timespan
 
 from discrete_event_sim import Simulation, Event
 
@@ -28,7 +25,7 @@ class DataLost(Exception):
 
 
 def get_not_lost_blocks_count(node: "Node") -> int:
-    count: int = 0
+    count = 0
     for i in range(node.n):
         if node.local_blocks[i] or node.backed_up_blocks[i]:
             count += 1
@@ -36,9 +33,9 @@ def get_not_lost_blocks_count(node: "Node") -> int:
 
 
 def get_lost_blocks_count(nodes: list["Node"]) -> int:
-    lost: int = 0
+    lost = 0
     for node in nodes:
-        count: int = get_not_lost_blocks_count(node)
+        count = get_not_lost_blocks_count(node)
         if count < node.k:
             lost += node.n
     return lost
@@ -122,8 +119,10 @@ class Node:
     def __post_init__(self):
         """Compute other data dependent on config values and set up initial state."""
 
-        # whether this node is selfish. By default, nodes are not selfish.
-        self.selfish: bool = False
+        # only nodes that are client or peer have the selfish attribute, server nodes cannot be selfish
+        if "client" in self.name or "peer" in self.name:
+            # whether this node is selfish. By default, nodes are not selfish.
+            self.selfish: bool = False
 
         # whether this node is online. All nodes start offline.
         self.online: bool = False
@@ -156,36 +155,25 @@ class Node:
 
     def find_block_to_back_up(self):
         """Returns the block id of a block that needs backing up, or None if there are none."""
-        if self.selfish:
-            # check if node has no free space
-            if self.free_space == 0:
-                # selfish node backs up own blocks if no free space
-                for block_id, held_locally in enumerate(self.local_blocks):
-                    if held_locally:
-                        return block_id
-
-            # check for free slots
-            if len(self.backed_up_blocks) == self.n:
-                # selfish node backs up own blocks if no free slots
+        # only nodes that are client or peer have the selfish attribute, server nodes cannot be selfish
+        if "client" in self.name or "peer" in self.name:
+            if self.selfish:
+                # for selfish nodes, we back up the blocks that we have locally,
+                # even if they are already backed up because the selfish node will not care about the redundancy
                 for block_id, held_locally in enumerate(self.local_blocks):
                     if held_locally:
                         return block_id
             else:
-                # prioritize backing up other nodes' blocks
+                # default behaviour
                 for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
                     if held_locally and not peer:
                         return block_id
         else:
-            # prioritize backing up other nodes' blocks
+            # find a block that we have locally but not remotely
+            # check `enumerate` and `zip`at https://docs.python.org/3/library/functions.html
             for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
                 if held_locally and not peer:
                     return block_id
-
-            # only back up own blocks if no free slots
-            if len(self.backed_up_blocks) == self.n:
-                for block_id, held_locally in enumerate(self.local_blocks):
-                    if held_locally:
-                        return block_id
         return None
 
     def schedule_next_upload(self, sim: Backup):
@@ -387,7 +375,6 @@ class BlockBackupComplete(TransferComplete):
     def update_block_state(self):
         owner, peer = self.uploader, self.downloader
         peer.free_space -= owner.block_size
-        assert peer.free_space >= 0
         owner.backed_up_blocks[self.block_id] = peer
         peer.remote_blocks_held[owner] = self.block_id
 
@@ -398,47 +385,3 @@ class BlockRestoreComplete(TransferComplete):
         owner.local_blocks[self.block_id] = True
         if sum(owner.local_blocks) == owner.k:  # we have exactly k local blocks, we have all of them then
             owner.local_blocks = [True] * owner.n
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="p2p.cfg", help="configuration file")
-    parser.add_argument("--max-t", default="100 years")
-    parser.add_argument("--seed", default=1, help="random seed")
-    parser.add_argument("--verbose", action='store_true')
-    args = parser.parse_args()
-
-    if args.seed:
-        random.seed(args.seed)  # set a seed to make experiments repeatable
-    if args.verbose:
-        logging.basicConfig(format='{levelname}:{message}', level=logging.INFO, style='{')  # output info on stdout
-
-    # functions to parse every parameter of peer configuration
-    parsing_functions = [
-        ('n', int), ('k', int),
-        ('data_size', parse_size), ('storage_size', parse_size),
-        ('upload_speed', parse_size), ('download_speed', parse_size),
-        ('average_uptime', parse_timespan), ('average_downtime', parse_timespan),
-        ('average_lifetime', parse_timespan), ('average_recover_time', parse_timespan),
-        ('arrival_time', parse_timespan)
-    ]
-
-    config = configparser.ConfigParser()
-    config.read(args.config)
-    nodes = []  # we build the list of nodes to pass to the Backup class
-    for node_class in config.sections():
-        class_config = config[node_class]
-        # list comprehension: https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions
-        cfg = [parse(class_config[name]) for name, parse in parsing_functions]
-        # the `callable(p1, p2, *args)` idiom is equivalent to `callable(p1, p2, args[0], args[1], ...)
-        nodes.extend(Node(f"{node_class}-{i}", *cfg) for i in range(class_config.getint('number')))
-    sim = Backup(nodes)
-    sim.run(parse_timespan(args.max_t))
-    for node in nodes:
-        print(f"Node {node.name}: Average uptime: {node.average_uptime}, Average downtime: {node.average_downtime}, "
-              f"Average lifetime: {node.average_lifetime}, Average recover time: {node.average_recover_time}")
-    sim.log_info(f"Simulation over")
-
-
-if __name__ == '__main__':
-    main()
