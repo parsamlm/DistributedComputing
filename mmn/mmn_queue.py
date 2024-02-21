@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
-import csv
 import collections
 import logging
 from random import expovariate, seed, sample
 import matplotlib.pyplot as plt
 
 from discrete_event_sim import Simulation, Event
+
 
 class MMN(Simulation):
 
@@ -34,7 +34,7 @@ class MMN(Simulation):
         # time should depend also on "n"
         self.schedule(expovariate(self.arrival_rate), Arrival(job_id))
 
-    def schedule_completion(self, job_id, server, is_preempted=False, remaining_time = None):
+    def schedule_completion(self, job_id, server, is_preempted=False, remaining_time=None):
         # schedule the time of the completion event
         if not is_preempted:
             service_time = expovariate(self.mu)
@@ -44,17 +44,19 @@ class MMN(Simulation):
 
         if service_time > self.timeSlice:
             self.schedule(self.timeSlice, Preemption(job_id, server, service_time - self.timeSlice))
-        else:        
+        else:
             self.schedule(service_time, Completion(job_id, server))
 
     def queue_len(self, i):
         return len(self.queues[i]) + (1 if self.running[i] is not None else 0)
+
 
 class QueLength(Event):
     def process(self, sim: MMN):
         for i in range(sim.n):
             sim.queueLengths.append(sim.queue_len(i))
         sim.schedule(sim.timeInterval, QueLength())
+
 
 class Arrival(Event):
 
@@ -66,7 +68,7 @@ class Arrival(Event):
         # set the arrival time of the job
         sim.arrivals[self.id] = sim.t
         servers = sample(range(sim.n), sim.d)  # sample d servers
-        server = min(servers, key=lambda s: len(sim.queues[s])) # find the server with the shortest queue
+        server = min(servers, key=lambda s: len(sim.queues[s]))  # find the server with the shortest queue
         # if there is no running job, assign the incoming one and schedule its completion
         if sim.running[server] is None:
             sim.running[server] = self.id
@@ -75,7 +77,8 @@ class Arrival(Event):
         else:
             sim.queues[server].append((self.id, sim.jobServiceTimes.get(self.id, expovariate(sim.mu))))
         # schedule the arrival of the next job
-        sim.schedule_arrival(self.id+1)
+        sim.schedule_arrival(self.id + 1)
+
 
 class Completion(Event):
     def __init__(self, job_id, server):
@@ -99,6 +102,7 @@ class Completion(Event):
             sim.schedule_completion(next_job_id, self.server, is_preempted=True, remaining_time=next_job_remaining_time)
         else:
             sim.running[self.server] = None
+
 
 class Preemption(Event):
     def __init__(self, job_id, server, remaining_time):
@@ -126,6 +130,7 @@ def run_simulation(lambd, mu, n, max_t, d):
 
     return sim.queueLengths
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lambd', type=float, default=0.5)
@@ -145,13 +150,13 @@ def main():
 
     for lambd in [0.5, 0.9, 0.95, 0.99]:
         queueLengths = run_simulation(lambd, args.mu, args.n, args.max_t, args.d)
-        counts = [0]*15
+        counts = [0] * 15
         for length in queueLengths:
             if length == 0:  # Skip over queue lengths of zero
                 continue
-            for i in range(min(length+1, 15)):
+            for i in range(min(length + 1, 15)):
                 counts[i] += 1
-        fractions = [count/len(queueLengths) for count in counts]
+        fractions = [count / len(queueLengths) for count in counts]
         plt.plot(range(1, 15), fractions[1:], label=f'lambd={lambd}')
 
     plt.xlabel('Queue length')
@@ -161,6 +166,7 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.show()
+
 
 if __name__ == '__main__':
     main()

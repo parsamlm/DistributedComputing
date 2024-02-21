@@ -3,7 +3,7 @@ import client_server
 import p2p
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", default="client_server", help="You should choose between 'p2p' and 'client_server'")
+parser.add_argument("--config", default="p2p", help="You should choose between 'p2p' and 'client_server'")
 args = parser.parse_args()
 
 if args.config == "p2p":

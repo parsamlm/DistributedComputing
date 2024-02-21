@@ -155,8 +155,10 @@ class Node:
 
     def find_block_to_back_up(self):
         """Returns the block id of a block that needs backing up, or None if there are none."""
-        # only nodes that are client or peer have the selfish attribute, server nodes cannot be selfish
+        # servers doesn't have blocks to be uploaded, also they are not selfish.
         if "client" in self.name or "peer" in self.name:
+            # if it's selfish node, it doesn't care if it already has uploaded his blocks or not,
+            # it prefers to upload his blocks again.
             if self.selfish:
                 # for selfish nodes, we back up the blocks that we have locally,
                 # even if they are already backed up because the selfish node will not care about the redundancy
@@ -164,16 +166,11 @@ class Node:
                     if held_locally:
                         return block_id
             else:
-                # default behaviour
+                # find a block that we have locally but not remotely, default behavior
+                # check `enumerate` and `zip`at https://docs.python.org/3/library/functions.html
                 for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
                     if held_locally and not peer:
                         return block_id
-        else:
-            # find a block that we have locally but not remotely
-            # check `enumerate` and `zip`at https://docs.python.org/3/library/functions.html
-            for block_id, (held_locally, peer) in enumerate(zip(self.local_blocks, self.backed_up_blocks)):
-                if held_locally and not peer:
-                    return block_id
         return None
 
     def schedule_next_upload(self, sim: Backup):
@@ -374,7 +371,11 @@ class BlockBackupComplete(TransferComplete):
 
     def update_block_state(self):
         owner, peer = self.uploader, self.downloader
+        peer_free_space_after_update = peer.free_space - owner.block_size
+        if peer_free_space_after_update <= 0:
+            return
         peer.free_space -= owner.block_size
+        assert peer.free_space >= 0
         owner.backed_up_blocks[self.block_id] = peer
         peer.remote_blocks_held[owner] = self.block_id
 

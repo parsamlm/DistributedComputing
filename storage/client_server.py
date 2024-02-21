@@ -39,7 +39,8 @@ def run():
         nodes.extend(Node(f"{node_class}-{i}", *cfg) for i in range(class_config.getint('number')))
     # uncomment to make the first client selfish, note that the simulation will
     # stop after some time as the servers will have no space to store the blocks
-    # nodes[0].selfish = True
+    nodes[0].selfish = True
+    # nodes[1].selfish = True
     sim = Backup(nodes)
     sim.run(parse_timespan(args.max_t))
     for node in nodes:
