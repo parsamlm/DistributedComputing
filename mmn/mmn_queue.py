@@ -52,6 +52,7 @@ class MMN(Simulation):
 
 
 class QueLength(Event):
+    # helper event to make plots
     def process(self, sim: MMN):
         for i in range(sim.n):
             sim.queueLengths.append(sim.queue_len(i))
@@ -63,7 +64,7 @@ class Arrival(Event):
     def __init__(self, job_id):
         self.id = job_id
 
-    def process(self, sim: MMN):  # TODO: complete this method
+    def process(self, sim: MMN):
         # print(f"Job {self.id} arrived at time {sim.t}")
         # set the arrival time of the job
         sim.arrivals[self.id] = sim.t
@@ -85,7 +86,7 @@ class Completion(Event):
         self.id = job_id  # currently unused, might be useful when extending
         self.server = server
 
-    def process(self, sim: MMN):  # TODO: complete this method
+    def process(self, sim: MMN):
         # print(f"Job {self.id} completed at time {sim.t}")
         assert sim.running[self.server] is not None
         # assert server_index is not None
