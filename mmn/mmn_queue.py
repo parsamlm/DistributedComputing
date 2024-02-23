@@ -23,10 +23,10 @@ class MMN(Simulation):
         self.d = d
         self.arrival_rate = lambd * n
         self.schedule(0, Arrival(0))
-        self.timeInterval = 1000
+        self.timeInterval = 1000  # queue lengths will be recorded in this time interval
         self.schedule(self.timeInterval, QueLength())
-        self.queueLengths = []  # Create a list of lists to store the length of each queue
-        self.timeSlice = 10
+        self.queueLengths = []  # an array to record the queue length in different time intervals
+        self.timeSlice = 10  # the maximum time that the job will not be preempted, for round-robin
         self.jobServiceTimes = {}  # Track original service times
 
     def schedule_arrival(self, job_id):
