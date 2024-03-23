@@ -2,7 +2,6 @@
 This repository contains the code for the Distributed Computing course at the University of Genoa. The course is part of the
 Master's degree in Computer Science.
 <hr>
-<h3><a href="https://github.com/parsamlm/DistributedComputing/blob/main/Report%20File.pdf">Report File</a></h3>
 <h3>Assignment 1 - MMN</h3>
 The MMN Queue is an integral part of our distributed computing project. It is designed to manage tasks in a
 multi-server system, ensuring efficient distribution and execution of tasks. First of all, MM1 code is converted to
@@ -23,3 +22,5 @@ ensure data reliability and fault tolerance. The project has two different confi
 file contains the configuration for the client-server network. Another strategy is added to the project called selfish node
 strategy. The selfish node strategy is a strategy that only prefer to upload its own data to the network.
 The project has been implemented in Python, and has two main modules: 'storage.py' and 'discrete_event_sim.py'. 
+<hr>
+<h3><a href="https://github.com/parsamlm/DistributedComputing/blob/main/Report%20File.pdf">Report File</a></h3>
