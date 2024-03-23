@@ -2,6 +2,7 @@
 This repository contains the code for the Distributed Computing course at the University of Genoa. The course is part of the
 Master's degree in Computer Science.
 <hr>
+<h3><a href="https://github.com/parsamlm/DistributedComputing/blob/main/Report%20File.pdf">Report File</a></h3>
 <h3>Assignment 1 - MMN</h3>
 The MMN Queue is an integral part of our distributed computing project. It is designed to manage tasks in a
 multi-server system, ensuring efficient distribution and execution of tasks. First of all, MM1 code is converted to
